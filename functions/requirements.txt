@@ -1,0 +1,4 @@
+firebase-functions==0.*  # Latest Python SDK as of 2025
+firebase-admin==6.*
+numpy==1.*
+functions-framework==3.*  # Keep for MarsMind later

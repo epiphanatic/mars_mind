@@ -4,6 +4,8 @@ import 'dart:convert'; // For encoding/decoding JSON
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class Vitals {
   final String crewId;
@@ -87,7 +89,54 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   final String crewId = 'astro_001';
 
+  Future<UserCredential?> signInWithGoogle() async {
+    try {
+      // Start the Google Sign-In process
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) {
+        // User canceled the sign-in
+        return null;
+      }
+
+      // Get authentication details from Google
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
+      // Create a credential for Firebase
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      // Sign in to Firebase with the credential
+      return await FirebaseAuth.instance.signInWithCredential(credential);
+    } catch (e) {
+      print('Error during Google Sign-In: $e');
+      return null;
+    }
+  }
+
   _createVital() async {
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      print('No user is signed in. Please sign in first.');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please sign in to create a vital.')),
+      );
+      return;
+    }
+
+    final String? idToken = await user.getIdToken(true); // Force refresh
+    if (idToken == null) {
+      print('Failed to retrieve ID token.');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Authentication error. Try signing in again.')),
+      );
+      return;
+    }
+
+    print('ID Token: $idToken');
+
     // Define the URL
     final url = Uri.parse('https://analyze-vitals-odc2umnfqa-uc.a.run.app');
 
@@ -96,15 +145,18 @@ class _MyHomePageState extends State<MyHomePage> {
       "crew_id": "astro_001",
       "heart_rate": 95.0,
       "sleep_hours": 5.0,
-      "timestamp": "2025-03-02T12:34:56Z",
+      "timestamp": DateTime.now().toIso8601String(), // Use current timestamp
     };
 
     try {
       // Make the POST request
       final response = await http.post(
         url,
-        headers: {'Content-Type': 'application/json; charset=UTF-8'},
-        body: jsonEncode(data), // Convert the data to JSON
+        headers: {
+          'Content-Type': 'application/json; charset=UTF-8',
+          'Authorization': 'Bearer $idToken',
+        },
+        body: jsonEncode(data),
       );
 
       // Check the response
@@ -125,6 +177,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final User user = FirebaseAuth.instance.currentUser!;
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.primary,
@@ -140,13 +194,29 @@ class _MyHomePageState extends State<MyHomePage> {
             //   '$_counter',
             //   style: Theme.of(context).textTheme.headlineMedium,
             // ),
+            Text('User ID: ${user.uid}'),
+
+            ElevatedButton(
+              onPressed: signInWithGoogle,
+              child: Text('Sign in with Google'),
+            ),
             StreamBuilder<List<Vitals>>(
               stream: VitalsService().getLatestVitals(crewId),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) {
+                // Show a loading indicator while waiting for data
+                if (snapshot.connectionState == ConnectionState.waiting) {
                   return Center(child: CircularProgressIndicator());
                 }
-                final vitals = snapshot.data!.first; // Take the latest
+                // Handle errors from the stream
+                if (snapshot.hasError) {
+                  return Center(child: Text('Error: ${snapshot.error}'));
+                }
+                // Check if data is absent or the list is empty
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return Center(child: Text('No vitals available for $crewId'));
+                }
+                // Data exists and is non-empty; proceed to display it
+                final vitals = snapshot.data!.first;
                 return Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(

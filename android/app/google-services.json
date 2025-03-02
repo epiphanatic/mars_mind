@@ -7,31 +7,17 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1035273527238:android:2d79b408603dc537439cc7",
-        "android_client_info": {
-          "package_name": "com.example.mars_mind"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyBcuUBuau6oIBmqXZRYtqhHCDMN-FNjlwI"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
         "mobilesdk_app_id": "1:1035273527238:android:d97dbde25215c913439cc7",
         "android_client_info": {
           "package_name": "systems.spore.mars_mind"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "1035273527238-dplkvgmm8ld3mo5l39jrmepigmt6ti5r.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBcuUBuau6oIBmqXZRYtqhHCDMN-FNjlwI"
@@ -39,7 +25,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1035273527238-dplkvgmm8ld3mo5l39jrmepigmt6ti5r.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1035273527238-66b3o3ctuc9hj573nr6asc79nalno2g8.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.marsMind"
+              }
+            }
+          ]
         }
       }
     }

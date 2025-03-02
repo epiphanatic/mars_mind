@@ -64,6 +64,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '1035273527238',
     projectId: 'mars-mind',
     storageBucket: 'mars-mind.firebasestorage.app',
+    iosClientId: '1035273527238-66b3o3ctuc9hj573nr6asc79nalno2g8.apps.googleusercontent.com',
     iosBundleId: 'com.example.marsMind',
   );
 
@@ -73,6 +74,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '1035273527238',
     projectId: 'mars-mind',
     storageBucket: 'mars-mind.firebasestorage.app',
+    iosClientId: '1035273527238-66b3o3ctuc9hj573nr6asc79nalno2g8.apps.googleusercontent.com',
     iosBundleId: 'com.example.marsMind',
   );
 

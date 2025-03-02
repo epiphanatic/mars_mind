@@ -13,7 +13,7 @@
 #     return https_fn.Response("Hello world!")
 
 from firebase_functions import https_fn
-from firebase_admin import initialize_app, firestore
+from firebase_admin import initialize_app, firestore, auth
 import numpy as np
 
 initialize_app()
@@ -24,6 +24,16 @@ db = firestore.client()
 def analyze_vitals(req: https_fn.Request) -> https_fn.Response:
     if req.method != 'POST':
         return https_fn.Response("Only POST requests are accepted", status=405)
+
+    auth_header = req.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        id_token = auth_header[7:]  # Remove "Bearer "
+        try:
+            decoded_token = auth.verify_id_token(id_token)
+            print(f"User verified: {decoded_token.get('uid', 'Unknown UID')}")
+        except auth.InvalidIdTokenError as e:
+            return https_fn.Response(f"Invalid token: {str(e)}", status=401)
+
     try:
         data = req.get_json()
         crew_id = data['crew_id']

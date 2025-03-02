@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1035273527238",
+    "project_id": "mars-mind",
+    "storage_bucket": "mars-mind.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1035273527238:android:2d79b408603dc537439cc7",
+        "android_client_info": {
+          "package_name": "com.example.mars_mind"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBcuUBuau6oIBmqXZRYtqhHCDMN-FNjlwI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1035273527238:android:d97dbde25215c913439cc7",
+        "android_client_info": {
+          "package_name": "systems.spore.mars_mind"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBcuUBuau6oIBmqXZRYtqhHCDMN-FNjlwI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

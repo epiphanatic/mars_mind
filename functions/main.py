@@ -45,7 +45,7 @@ def analyze_vitals(req: https_fn.Request) -> https_fn.Response:
             'processed_at': firestore.SERVER_TIMESTAMP
         })
 
-        return https_fn.Response(f"Processed {crew_id}: Stress Score {stress_score}", status=200)
+        return https_fn.Response(f"Processed {crew_id}: Stress Score {stress_score}", status=201)
     except Exception as e:
         print(f"Error: {e}")
         return https_fn.Response("Error processing vitals", status=500)

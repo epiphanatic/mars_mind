@@ -219,6 +219,7 @@ class _MyHomePageState extends State<MyHomePage> {
     _simulationTimer?.cancel();
 
     final String? idToken = await user.getIdToken(true); // Force refresh
+
     if (idToken == null) {
       print('Failed to retrieve ID token for simulation.');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -234,15 +235,17 @@ class _MyHomePageState extends State<MyHomePage> {
       final randomSleepHours = 4 + _random.nextDouble() * 4; // 4-8 hours
       final timestamp = DateTime.now().toIso8601String();
 
-      final url = Uri.parse('https://analyze-vitals-odc2umnfqa-uc.a.run.app');
+      // python cloud function
+      // final url = Uri.parse('https://analyze-vitals-odc2umnfqa-uc.a.run.app');
+
+      // rust local
+      final url = Uri.parse('http://192.168.1.18:8080/analyze_vitals');
       final data = {
         "crew_id": user.uid,
         "heart_rate": randomHeartRate,
         "sleep_hours": randomSleepHours,
         "timestamp": timestamp,
       };
-
-      print(data);
 
       try {
         final response = await http.post(

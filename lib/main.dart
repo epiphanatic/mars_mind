@@ -231,8 +231,8 @@ class _MyHomePageState extends State<MyHomePage> {
     // Start a periodic timer to send random vitals every 5 seconds
     _simulationTimer = Timer.periodic(Duration(seconds: 5), (timer) async {
       print(timer.tick);
-      final randomHeartRate = 60 + _random.nextDouble() * 40; // 60-100 bpm
-      final randomSleepHours = 4 + _random.nextDouble() * 4; // 4-8 hours
+      final randomHeartRate = 60 + _random.nextDouble() * 80; // 60-140 bpm
+      final randomSleepHours = 2 + _random.nextDouble() * 4; // 2-6 hours
       final timestamp = DateTime.now().toIso8601String();
 
       // python cloud function

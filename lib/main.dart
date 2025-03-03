@@ -93,19 +93,19 @@ class _MyHomePageState extends State<MyHomePage> {
   Timer? _simulationTimer; // Timer for simulation
   final Random _random = Random(); // For generating random numbers
 
-  late StreamSubscription<User?> authSubscription;
+  late StreamSubscription<User?> _authSubscription;
 
   @override
   void initState() {
     super.initState();
     // Optionally listen to auth changes manually (you can skip this if using StreamBuilder)
-    authSubscription = FirebaseAuth.instance.authStateChanges().listen((
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((
       User? user,
     ) {
       if (user != null) {
-        print('User signed in: ${user.uid}');
+        debugPrint('User signed in: ${user.uid}');
       } else {
-        print('User signed out');
+        debugPrint('User signed out');
       }
       setState(() {}); // Trigger UI update
     });
@@ -113,7 +113,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   void dispose() {
-    authSubscription.cancel(); // Clean up the subscription
+    _authSubscription.cancel(); // Clean up the subscription
+    _simulationTimer?.cancel(); // Clean up the timer
     super.dispose();
   }
 
@@ -139,7 +140,7 @@ class _MyHomePageState extends State<MyHomePage> {
       // Sign in to Firebase with the credential
       return await FirebaseAuth.instance.signInWithCredential(credential);
     } catch (e) {
-      print('Error during Google Sign-In: $e');
+      debugPrint('Error during Google Sign-In: $e');
       return null;
     }
   }
@@ -152,7 +153,7 @@ class _MyHomePageState extends State<MyHomePage> {
   _createVital() async {
     final User? user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      print('No user is signed in. Please sign in first.');
+      debugPrint('No user is signed in. Please sign in first.');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Please sign in to create a vital.')),
       );
@@ -160,8 +161,8 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     final String? idToken = await user.getIdToken(true); // Force refresh
-    if (idToken == null) {
-      print('Failed to retrieve ID token.');
+    if (idToken == null && mounted) {
+      debugPrint('Failed to retrieve ID token.');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Authentication error. Try signing in again.')),
       );
@@ -193,22 +194,22 @@ class _MyHomePageState extends State<MyHomePage> {
       // Check the response
       if (response.statusCode == 201) {
         // Success (201 Created is typical for POST success)
-        print('Response: ${response.body}');
+        debugPrint('Response: ${response.body}');
       } else {
         // Handle error
-        print('Failed with status: ${response.statusCode}');
-        print('Response: ${response.body}');
+        debugPrint('Failed with status: ${response.statusCode}');
+        debugPrint('Response: ${response.body}');
       }
     } catch (e) {
       // Handle network or other errors
-      print('Error: $e');
+      debugPrint('Error: $e');
     }
   }
 
   Future<void> runSimulation() async {
     final User? user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      print('No user is signed in. Please sign in first.');
+      debugPrint('No user is signed in. Please sign in first.');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Please sign in to start simulation.')),
       );
@@ -220,8 +221,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
     final String? idToken = await user.getIdToken(true); // Force refresh
 
-    if (idToken == null) {
-      print('Failed to retrieve ID token for simulation.');
+    if (idToken == null && mounted) {
+      debugPrint('Failed to retrieve ID token for simulation.');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Authentication error. Try signing in again.')),
       );
@@ -230,7 +231,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
     // Start a periodic timer to send random vitals every 5 seconds
     _simulationTimer = Timer.periodic(Duration(seconds: 5), (timer) async {
-      print(timer.tick);
       final randomHeartRate = 60 + _random.nextDouble() * 80; // 60-140 bpm
       final randomSleepHours = 2 + _random.nextDouble() * 4; // 2-6 hours
       final timestamp = DateTime.now().toIso8601String();
@@ -257,19 +257,19 @@ class _MyHomePageState extends State<MyHomePage> {
           body: jsonEncode(data),
         );
 
-        print(response.body);
+        debugPrint(response.body);
 
         if (response.statusCode == 201) {
           // final responseData = jsonDecode(response.body);
-          print('Simulation: ${response.body}');
+          debugPrint('Simulation: ${response.body}');
         } else {
-          print(
+          debugPrint(
             'Simulation failed with status: ${response.statusCode}, Body: ${response.body}',
           );
           timer.cancel(); // Stop simulation on failure
         }
       } catch (e) {
-        print('Simulation error: $e');
+        debugPrint('Simulation error: $e');
         timer.cancel(); // Stop simulation on error
       }
     });
@@ -284,12 +284,12 @@ class _MyHomePageState extends State<MyHomePage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Simulation stopped.')));
-      print('Simulation stopped.');
+      debugPrint('Simulation stopped.');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('No simulation is currently running.')),
       );
-      print('No simulation is running.');
+      debugPrint('No simulation is running.');
     }
   }
 

@@ -44,10 +44,11 @@ class VitalsService {
 
   Stream<List<Vitals>> getLatestVitals(String crewId) {
     return _firestore
-        .collection('vitals')
-        .where('crew_id', isEqualTo: crewId)
+        .collection('users') // Changed from 'vitals' to 'users'
+        .doc(crewId) // Use UID as document ID
+        .collection('vitals') // Subcollection 'vitals'
         .orderBy('timestamp', descending: true)
-        .limit(1)
+        .limit(50) // Limit to 50 for performance
         .snapshots()
         .map(
           (snapshot) =>
@@ -55,6 +56,25 @@ class VitalsService {
                   .map((doc) => Vitals.fromFirestore(doc.data()))
                   .toList(),
         );
+  }
+
+  Future<void> deleteAllVitals(String uid) async {
+    final collectionRef = _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('vitals');
+
+    // Get all documents in the subcollection
+    final querySnapshot = await collectionRef.get();
+
+    // Use a batch to delete all documents efficiently
+    final batch = _firestore.batch();
+    for (final doc in querySnapshot.docs) {
+      batch.delete(doc.reference);
+    }
+
+    // Commit the batch delete
+    await batch.commit();
   }
 }
 
@@ -339,39 +359,31 @@ class _MyHomePageState extends State<MyHomePage> {
                           child: Text('No vitals available for ${user.uid}'),
                         );
                       }
-                      final vitals = vitalsSnapshot.data!.first;
-                      return Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Crew ID: ${vitals.crewId}',
-                              style: TextStyle(fontSize: 18),
-                            ),
-                            Text(
-                              'Heart Rate: ${vitals.heartRate}',
-                              style: TextStyle(fontSize: 18),
-                            ),
-                            Text(
-                              'Sleep Hours: ${vitals.sleepHours}',
-                              style: TextStyle(fontSize: 18),
-                            ),
-                            Text(
-                              'Stress Flag: ${vitals.stressFlag}',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color:
-                                    vitals.stressFlag == 'High'
-                                        ? Colors.red
-                                        : Colors.green,
+                      final vitalsList = vitalsSnapshot.data!;
+                      return Expanded(
+                        child: ListView.builder(
+                          itemCount: vitalsList.length,
+                          itemBuilder: (context, index) {
+                            final vitals = vitalsList[index];
+                            return ListTile(
+                              title: Text(
+                                'Heart Rate: ${vitals.heartRate.toStringAsFixed(1)} bpm',
                               ),
-                            ),
-                            Text(
-                              'Timestamp: ${vitals.timestamp}',
-                              style: TextStyle(fontSize: 14),
-                            ),
-                          ],
+                              subtitle: Text(
+                                'Sleep Hours: ${vitals.sleepHours.toStringAsFixed(1)} | Stress: ${vitals.stressFlag} | Time: ${vitals.timestamp}',
+                              ),
+                              trailing: Text(
+                                vitals.stressScore.toStringAsFixed(1),
+                                style: TextStyle(
+                                  color:
+                                      vitals.stressFlag == "High"
+                                          ? Colors.red
+                                          : Colors.green,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       );
                     },
@@ -393,7 +405,7 @@ class _MyHomePageState extends State<MyHomePage> {
           floatingActionButton:
               user == null
                   ? null
-                  : Row(
+                  : Column(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       FloatingActionButton.extended(
@@ -402,12 +414,30 @@ class _MyHomePageState extends State<MyHomePage> {
                         label: const Text('Stop Simulation'),
                         icon: Icon(Icons.add),
                       ),
-                      SizedBox(width: 16), // Spacing between buttons
+
+                      SizedBox(height: 16),
                       FloatingActionButton.extended(
                         onPressed: runSimulation,
                         tooltip: 'Start Vitals Simulation',
                         label: const Text('Vitals Simulation'),
                         icon: Icon(Icons.play_arrow),
+                      ),
+
+                      SizedBox(height: 16),
+                      FloatingActionButton.extended(
+                        onPressed: () async {
+                          await VitalsService().deleteAllVitals(user.uid);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('All vitals deleted.'),
+                              ),
+                            );
+                          }
+                        },
+                        tooltip: 'Delete All Vitals',
+                        label: const Text('Delete All'),
+                        icon: Icon(Icons.delete),
                       ),
                     ],
                   ),

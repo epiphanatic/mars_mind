@@ -7,9 +7,8 @@ use chrono::Utc;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tokio::net::TcpListener; 
+use tokio::net::TcpListener;
 
-// Data coming from the POST request
 #[derive(Serialize, Deserialize, Debug)]
 struct VitalsRequest {
     crew_id: String,
@@ -18,14 +17,12 @@ struct VitalsRequest {
     timestamp: String,
 }
 
-// Data we send back
 #[derive(Serialize)]
 struct VitalsResponse {
     message: String,
     status: String,
 }
 
-// Verify Firebase ID token
 async fn verify_id_token(client: &Client, token: &str) -> Result<String, String> {
     let url = "https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=AIzaSyBcuUBuau6oIBmqXZRYtqhHCDMN-FNjlwI";
     let res = client
@@ -59,14 +56,13 @@ async fn verify_id_token(client: &Client, token: &str) -> Result<String, String>
 }
 
 async fn get_access_token(client: &Client) -> Result<String, String> {
-    // Try metadata server (for Cloud Run)
     let metadata_url = "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token";
     let res = client
         .get(metadata_url)
         .header("Metadata-Flavor", "Google")
         .send()
         .await;
-    
+
     match res {
         Ok(response) if response.status().is_success() => {
             let json: serde_json::Value = response
@@ -79,7 +75,6 @@ async fn get_access_token(client: &Client) -> Result<String, String> {
                 .ok_or("No access token in metadata response".to_string())
         }
         _ => {
-            // Fallback to ADC locally
             let output = std::process::Command::new("gcloud")
                 .args(&["auth", "print-access-token"])
                 .output()
@@ -96,19 +91,20 @@ async fn get_access_token(client: &Client) -> Result<String, String> {
     }
 }
 
-// Save to Firestore
 async fn save_to_firestore(
     client: &Client,
     vitals: &VitalsRequest,
     stress_score: f64,
     stress_flag: &str,
+    uid: &str,
 ) -> Result<(), String> {
     let access_token = get_access_token(client).await?;
     let project_id = "mars-mind";
     let url = format!(
-        "https://firestore.googleapis.com/v1/projects/{}/databases/(default)/documents/vitals/{}?access_token={}",
+        "https://firestore.googleapis.com/v1/projects/{}/databases/(default)/documents/users/{}/vitals/{}?access_token={}",
         project_id,
-        format!("{}_{}", vitals.crew_id, vitals.timestamp),
+        uid,
+        vitals.timestamp.replace(":", "_"), // Use timestamp as doc ID, sanitized
         access_token
     );
     let body = json!({
@@ -148,14 +144,12 @@ async fn save_to_firestore(
     Ok(())
 }
 
-// The main API endpoint
 async fn analyze_vitals(
     headers: HeaderMap,
     Json(vitals): Json<VitalsRequest>,
 ) -> (StatusCode, Json<VitalsResponse>) {
     let client = Client::new();
 
-    // Check Authorization header
     let auth_header = match headers.get("Authorization") {
         Some(h) => h.to_str().unwrap_or(""),
         None => {
@@ -180,8 +174,11 @@ async fn analyze_vitals(
     }
     let id_token = &auth_header[7..];
 
-    match verify_id_token(&client, id_token).await {
-        Ok(uid) => println!("User verified: UID = {}", uid),
+    let uid = match verify_id_token(&client, id_token).await {
+        Ok(uid) => {
+            println!("User verified: UID = {}", uid);
+            uid
+        }
         Err(e) => {
             return (
                 StatusCode::UNAUTHORIZED,
@@ -193,17 +190,11 @@ async fn analyze_vitals(
         }
     };
 
-    // Calculate stress score (same as Python)
     let raw_stress = vitals.heart_rate * 0.6 - vitals.sleep_hours * 10.0;
     let stress_score = raw_stress.clamp(0.1, 100.0);
-    let stress_flag = if stress_score > 50.0 {
-        "High"
-    } else {
-        "Normal"
-    };
+    let stress_flag = if stress_score > 50.0 { "High" } else { "Normal" };
 
-    // Save to Firestore
-    if let Err(e) = save_to_firestore(&client, &vitals, stress_score, stress_flag).await {
+    if let Err(e) = save_to_firestore(&client, &vitals, stress_score, stress_flag, &uid).await {
         println!("Error: {}", e);
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -217,22 +208,17 @@ async fn analyze_vitals(
     (
         StatusCode::CREATED,
         Json(VitalsResponse {
-            message: format!(
-                "Processed {}: Stress Score {}",
-                vitals.crew_id, stress_score
-            ),
+            message: format!("Processed {}: Stress Score {}", vitals.crew_id, stress_score),
             status: "success".to_string(),
         }),
     )
 }
 
-// Start the server
 #[tokio::main]
 async fn main() {
     let app = Router::new().route("/analyze_vitals", post(analyze_vitals));
-
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], 8080));
-    let listener = TcpListener::bind(addr).await.unwrap(); // Bind the address to a TcpListener
+    let listener = TcpListener::bind(addr).await.unwrap();
     println!("Listening on {}", listener.local_addr().unwrap());
-    axum::serve(listener, app).await.unwrap(); // Correctly pass listener and app
+    axum::serve(listener, app).await.unwrap();
 }

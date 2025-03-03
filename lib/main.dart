@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert'; // For encoding/decoding JSON
@@ -87,7 +90,32 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  final String crewId = 'astro_001';
+  Timer? _simulationTimer; // Timer for simulation
+  final Random _random = Random(); // For generating random numbers
+
+  late StreamSubscription<User?> authSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    // Optionally listen to auth changes manually (you can skip this if using StreamBuilder)
+    authSubscription = FirebaseAuth.instance.authStateChanges().listen((
+      User? user,
+    ) {
+      if (user != null) {
+        print('User signed in: ${user.uid}');
+      } else {
+        print('User signed out');
+      }
+      setState(() {}); // Trigger UI update
+    });
+  }
+
+  @override
+  void dispose() {
+    authSubscription.cancel(); // Clean up the subscription
+    super.dispose();
+  }
 
   Future<UserCredential?> signInWithGoogle() async {
     try {
@@ -116,6 +144,11 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  logOut() async {
+    await FirebaseAuth.instance.signOut();
+    await GoogleSignIn().signOut();
+  }
+
   _createVital() async {
     final User? user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -134,8 +167,6 @@ class _MyHomePageState extends State<MyHomePage> {
       );
       return;
     }
-
-    print('ID Token: $idToken');
 
     // Define the URL
     final url = Uri.parse('https://analyze-vitals-odc2umnfqa-uc.a.run.app');
@@ -162,8 +193,7 @@ class _MyHomePageState extends State<MyHomePage> {
       // Check the response
       if (response.statusCode == 201) {
         // Success (201 Created is typical for POST success)
-        final responseData = jsonDecode(response.body);
-        print('Response: $responseData');
+        print('Response: ${response.body}');
       } else {
         // Handle error
         print('Failed with status: ${response.statusCode}');
@@ -175,93 +205,211 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  Future<void> runSimulation() async {
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      print('No user is signed in. Please sign in first.');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please sign in to start simulation.')),
+      );
+      return;
+    }
+
+    // Stop any existing simulation
+    _simulationTimer?.cancel();
+
+    final String? idToken = await user.getIdToken(true); // Force refresh
+    if (idToken == null) {
+      print('Failed to retrieve ID token for simulation.');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Authentication error. Try signing in again.')),
+      );
+      return;
+    }
+
+    // Start a periodic timer to send random vitals every 5 seconds
+    _simulationTimer = Timer.periodic(Duration(seconds: 5), (timer) async {
+      print(timer.tick);
+      final randomHeartRate = 60 + _random.nextDouble() * 40; // 60-100 bpm
+      final randomSleepHours = 4 + _random.nextDouble() * 4; // 4-8 hours
+      final timestamp = DateTime.now().toIso8601String();
+
+      final url = Uri.parse('https://analyze-vitals-odc2umnfqa-uc.a.run.app');
+      final data = {
+        "crew_id": user.uid,
+        "heart_rate": randomHeartRate,
+        "sleep_hours": randomSleepHours,
+        "timestamp": timestamp,
+      };
+
+      print(data);
+
+      try {
+        final response = await http.post(
+          url,
+          headers: {
+            'Content-Type': 'application/json; charset=UTF-8',
+            'Authorization': 'Bearer $idToken',
+          },
+          body: jsonEncode(data),
+        );
+
+        print(response.body);
+
+        if (response.statusCode == 201) {
+          // final responseData = jsonDecode(response.body);
+          print('Simulation: ${response.body}');
+        } else {
+          print(
+            'Simulation failed with status: ${response.statusCode}, Body: ${response.body}',
+          );
+          timer.cancel(); // Stop simulation on failure
+        }
+      } catch (e) {
+        print('Simulation error: $e');
+        timer.cancel(); // Stop simulation on error
+      }
+    });
+  }
+
+  void stopSimulation() {
+    if (_simulationTimer != null && _simulationTimer!.isActive) {
+      _simulationTimer!.cancel();
+      setState(() {
+        // Optionally reset any simulation state
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Simulation stopped.')));
+      print('Simulation stopped.');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No simulation is currently running.')),
+      );
+      print('No simulation is running.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final User user = FirebaseAuth.instance.currentUser!;
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        }
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.primary,
+        final User? user = snapshot.data;
 
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            // const Text('You have pushed the button this many times:'),
-            // Text(
-            //   '$_counter',
-            //   style: Theme.of(context).textTheme.headlineMedium,
-            // ),
-            Text('User ID: ${user.uid}'),
-
-            ElevatedButton(
-              onPressed: signInWithGoogle,
-              child: Text('Sign in with Google'),
-            ),
-            StreamBuilder<List<Vitals>>(
-              stream: VitalsService().getLatestVitals(crewId),
-              builder: (context, snapshot) {
-                // Show a loading indicator while waiting for data
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(child: CircularProgressIndicator());
-                }
-                // Handle errors from the stream
-                if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                }
-                // Check if data is absent or the list is empty
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return Center(child: Text('No vitals available for $crewId'));
-                }
-                // Data exists and is non-empty; proceed to display it
-                final vitals = snapshot.data!.first;
-                return Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Crew ID: ${vitals.crewId}',
-                        style: TextStyle(fontSize: 18),
-                      ),
-                      Text(
-                        'Heart Rate: ${vitals.heartRate}',
-                        style: TextStyle(fontSize: 18),
-                      ),
-                      Text(
-                        'Sleep Hours: ${vitals.sleepHours}',
-                        style: TextStyle(fontSize: 18),
-                      ),
-                      Text(
-                        'Stress Flag: ${vitals.stressFlag}',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color:
-                              vitals.stressFlag == 'High'
-                                  ? Colors.red
-                                  : Colors.green,
+        return Scaffold(
+          appBar: AppBar(
+            backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+            title: Text(widget.title),
+          ),
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                if (user == null) ...[
+                  ElevatedButton(
+                    onPressed: signInWithGoogle,
+                    child: Text('Sign in with Google'),
+                  ),
+                ] else ...[
+                  Text('User ID: ${user.uid}'),
+                  ElevatedButton(onPressed: logOut, child: Text('Logout')),
+                  StreamBuilder<List<Vitals>>(
+                    stream: VitalsService().getLatestVitals(user.uid),
+                    builder: (context, vitalsSnapshot) {
+                      if (vitalsSnapshot.connectionState ==
+                          ConnectionState.waiting) {
+                        return Center(child: CircularProgressIndicator());
+                      }
+                      if (vitalsSnapshot.hasError) {
+                        return Center(
+                          child: Text('Error: ${vitalsSnapshot.error}'),
+                        );
+                      }
+                      if (!vitalsSnapshot.hasData ||
+                          vitalsSnapshot.data!.isEmpty) {
+                        return Center(
+                          child: Text('No vitals available for ${user.uid}'),
+                        );
+                      }
+                      final vitals = vitalsSnapshot.data!.first;
+                      return Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Crew ID: ${vitals.crewId}',
+                              style: TextStyle(fontSize: 18),
+                            ),
+                            Text(
+                              'Heart Rate: ${vitals.heartRate}',
+                              style: TextStyle(fontSize: 18),
+                            ),
+                            Text(
+                              'Sleep Hours: ${vitals.sleepHours}',
+                              style: TextStyle(fontSize: 18),
+                            ),
+                            Text(
+                              'Stress Flag: ${vitals.stressFlag}',
+                              style: TextStyle(
+                                fontSize: 18,
+                                color:
+                                    vitals.stressFlag == 'High'
+                                        ? Colors.red
+                                        : Colors.green,
+                              ),
+                            ),
+                            Text(
+                              'Timestamp: ${vitals.timestamp}',
+                              style: TextStyle(fontSize: 14),
+                            ),
+                          ],
                         ),
+                      );
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // floatingActionButton:
+          //     user == null
+          //         ? null
+          //         : FloatingActionButton.extended(
+          //           onPressed: _createVital,
+          //           tooltip: 'Increment',
+          //           label: const Text('Create Vital'),
+          //           icon: Icon(Icons.add),
+          //         ),
+          floatingActionButton:
+              user == null
+                  ? null
+                  : Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      FloatingActionButton.extended(
+                        onPressed: stopSimulation,
+                        tooltip: 'Stops Vitals Simulation',
+                        label: const Text('Stop Simulation'),
+                        icon: Icon(Icons.add),
                       ),
-                      Text(
-                        'Timestamp: ${vitals.timestamp}',
-                        style: TextStyle(fontSize: 14),
+                      SizedBox(width: 16), // Spacing between buttons
+                      FloatingActionButton.extended(
+                        onPressed: runSimulation,
+                        tooltip: 'Start Vitals Simulation',
+                        label: const Text('Vitals Simulation'),
+                        icon: Icon(Icons.play_arrow),
                       ),
                     ],
                   ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _createVital,
-        tooltip: 'Increment',
-        label: const Text('Create Vital'),
-        icon: Icon(Icons.add),
-      ),
+        );
+      },
     );
   }
 }

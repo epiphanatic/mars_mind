@@ -3,9 +3,11 @@
 # Deploy with `firebase deploy`
 
 # from firebase_functions import https_fn
-# from firebase_admin import initialize_app
+# from firebase_admin import initialize_app, credentials
 
-# initialize_app()
+# cred = credentials.Certificate("service-account.json")
+
+# initialize_app(cred)
 
 
 # @https_fn.on_request()
@@ -13,10 +15,13 @@
 #     return https_fn.Response("Hello world!")
 
 from firebase_functions import https_fn
-from firebase_admin import initialize_app, firestore, auth
+from firebase_admin import initialize_app, firestore, auth, credentials
 import numpy as np
 
-initialize_app()
+cred = credentials.Certificate("service-account.json")
+
+initialize_app(cred)
+
 db = firestore.client()
 
 
@@ -25,14 +30,19 @@ def analyze_vitals(req: https_fn.Request) -> https_fn.Response:
     if req.method != 'POST':
         return https_fn.Response("Only POST requests are accepted", status=405)
 
+    # Check for Authorization header (required for auth)
     auth_header = req.headers.get('Authorization')
-    if auth_header and auth_header.startswith('Bearer '):
-        id_token = auth_header[7:]  # Remove "Bearer "
-        try:
-            decoded_token = auth.verify_id_token(id_token)
-            print(f"User verified: {decoded_token.get('uid', 'Unknown UID')}")
-        except auth.InvalidIdTokenError as e:
-            return https_fn.Response(f"Invalid token: {str(e)}", status=401)
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return https_fn.Response("Unauthorized: No valid token provided", status=401)
+
+    # Extract and verify the ID token
+    id_token = auth_header[7:]  # Remove "Bearer "
+    try:
+        decoded_token = auth.verify_id_token(id_token)
+        print(
+            f"User verified: UID = {decoded_token.get('uid', 'Unknown UID')}")
+    except auth.InvalidIdTokenError as e:
+        return https_fn.Response(f"Invalid token: {str(e)}", status=401)
 
     try:
         data = req.get_json()
@@ -41,7 +51,9 @@ def analyze_vitals(req: https_fn.Request) -> https_fn.Response:
         sleep_hours = float(data['sleep_hours'])
         timestamp = data['timestamp']
 
-        stress_score = min(100, max(0, (heart_rate * 0.6 - sleep_hours * 10)))
+        raw_stress = heart_rate * 0.6 - sleep_hours * 10
+        # Minimum 0.1, maximum 100.0
+        stress_score = max(0.1, min(100.0, raw_stress))
         stress_flag = 'High' if stress_score > 50 else 'Normal'
 
         doc_ref = db.collection('vitals').document(f'{crew_id}_{timestamp}')

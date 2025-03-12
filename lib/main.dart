@@ -251,6 +251,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
     // Start a periodic timer to send random vitals every 5 seconds
     _simulationTimer = Timer.periodic(Duration(seconds: 5), (timer) async {
+      print('simulationTimer called.......................');
       final randomHeartRate = 60 + _random.nextDouble() * 80; // 60-140 bpm
       final randomSleepHours = 2 + _random.nextDouble() * 4; // 2-6 hours
       final timestamp = DateTime.now().toIso8601String();
